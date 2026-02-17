@@ -45,4 +45,29 @@ var (
 
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("242"))
+
+	// Detail view styles
+	userRoleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("255")).
+			Background(lipgloss.Color("28"))
+
+	assistantRoleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("255")).
+				Background(lipgloss.Color("208"))
+
+	toolCallStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("242")).
+			Italic(true)
+
+	detailTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("255")).
+				Background(lipgloss.Color("236")).
+				Padding(0, 1)
+
+	searchHighlightStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("226")).
+				Foreground(lipgloss.Color("0"))
 )

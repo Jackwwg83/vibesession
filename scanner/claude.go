@@ -76,11 +76,8 @@ func parseClaudeSession(filePath string) *model.Session {
 	// increase buffer for potentially large first lines
 	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
 
-	// read first line to get metadata + first user message
-	if !scanner.Scan() {
-		return nil
-	}
-
+	// scan lines to find the first one with a sessionId
+	// (some files start with file-history-snapshot or other non-session lines)
 	var firstLine struct {
 		SessionID string `json:"sessionId"`
 		CWD       string `json:"cwd"`
@@ -92,11 +89,17 @@ func parseClaudeSession(filePath string) *model.Session {
 		} `json:"message"`
 	}
 
-	if err := json.Unmarshal(scanner.Bytes(), &firstLine); err != nil {
-		return nil
+	found := false
+	for i := 0; i < 10 && scanner.Scan(); i++ {
+		if err := json.Unmarshal(scanner.Bytes(), &firstLine); err != nil {
+			continue
+		}
+		if firstLine.SessionID != "" {
+			found = true
+			break
+		}
 	}
-
-	if firstLine.SessionID == "" {
+	if !found {
 		return nil
 	}
 

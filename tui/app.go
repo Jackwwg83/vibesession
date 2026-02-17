@@ -18,6 +18,8 @@ const (
 	modeList mode = iota
 	modeSearch
 	modeCommand
+	modeDetail
+	modeDetailSearch
 )
 
 type Model struct {
@@ -33,6 +35,20 @@ type Model struct {
 	filter      string // "all", "claude", "codex"
 	launchCmd   string // final command to execute
 	quitting    bool
+
+	// tracks mode before entering command mode, so Esc returns correctly
+	prevMode mode
+
+	// detail view state
+	detailSession     model.Session
+	detailMessages    []model.Message
+	detailLines       []string // pre-rendered lines
+	detailOffset      int
+	detailLoading     bool
+	detailSearchInput textinput.Model
+	detailSearchQuery string
+	detailMatches     []int // line indices of search matches
+	detailMatchIdx    int   // current match index
 }
 
 func NewModel(sessions []model.Session) Model {
@@ -105,6 +121,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.clampOffset()
+		// re-render detail lines if in detail mode (width may have changed)
+		if (m.mode == modeDetail || m.mode == modeDetailSearch) && !m.detailLoading && m.detailMessages != nil {
+			m.detailLines = m.renderDetailContent()
+			m.detailScrollDown(0) // clamp offset to new bounds
+			if m.detailSearchQuery != "" {
+				m.computeSearchMatches()
+			}
+		}
+		return m, nil
+
+	case messagesLoadedMsg:
+		m = m.updateDetailLoaded(msg.filePath, msg.messages)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -115,6 +143,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSearch(msg)
 		case modeCommand:
 			return m.updateCommand(msg)
+		case modeDetail:
+			return m.updateDetail(msg)
+		case modeDetailSearch:
+			return m.updateDetailSearch(msg)
 		}
 	}
 	return m, nil
@@ -169,8 +201,12 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cmdInput.SetValue(cmd)
 			m.cmdInput.Focus()
 			m.cmdInput.CursorEnd()
+			m.prevMode = modeList
 			m.mode = modeCommand
 		}
+
+	case "v":
+		return m.enterDetail()
 
 	case "/":
 		m.searchInput.Focus()
@@ -209,7 +245,7 @@ func (m Model) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.cmdInput.Blur()
-		m.mode = modeList
+		m.mode = m.prevMode
 		return m, nil
 
 	case "enter":
@@ -226,6 +262,10 @@ func (m Model) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	if m.quitting {
 		return ""
+	}
+
+	if m.mode == modeDetail || m.mode == modeDetailSearch {
+		return m.viewDetail()
 	}
 
 	var b strings.Builder
@@ -335,7 +375,7 @@ func (m Model) renderRow(s model.Session, selected bool) string {
 }
 
 func (m Model) renderHelp() string {
-	return helpStyle.Render("  Enter: open  /: search  Tab: filter  q: quit")
+	return helpStyle.Render("  Enter: open  v: view  /: search  Tab: filter  q: quit")
 }
 
 type colWidths struct {
