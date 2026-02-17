@@ -10,10 +10,34 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jackwu/vibesession/model"
 	"github.com/jackwu/vibesession/scanner"
+	"github.com/jackwu/vibesession/tts"
 	"github.com/jackwu/vibesession/tui"
 )
 
 func main() {
+	// subcommand: vbs tts [setup|on|off|next|clear]
+	if len(os.Args) >= 2 && os.Args[1] == "tts" {
+		subcmd := ""
+		if len(os.Args) >= 3 {
+			subcmd = os.Args[2]
+		}
+		switch subcmd {
+		case "setup":
+			tts.RunSetup()
+		case "on":
+			tts.RunOn()
+		case "off":
+			tts.RunOff()
+		case "next":
+			tts.RunNext()
+		case "clear":
+			tts.RunClear()
+		default:
+			tts.RunStatus()
+		}
+		return
+	}
+
 	// scan both sources concurrently
 	claudeCh := make(chan []model.Session)
 	codexCh := make(chan []model.Session)
