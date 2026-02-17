@@ -20,6 +20,7 @@ const (
 	modeCommand
 	modeDetail
 	modeDetailSearch
+	modeNew
 )
 
 type Model struct {
@@ -38,6 +39,12 @@ type Model struct {
 
 	// tracks mode before entering command mode, so Esc returns correctly
 	prevMode mode
+
+	// current working directory (for new session)
+	cwd string
+
+	// new session form
+	newForm *newForm
 
 	// detail view state
 	detailSession     model.Session
@@ -147,6 +154,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDetail(msg)
 		case modeDetailSearch:
 			return m.updateDetailSearch(msg)
+		case modeNew:
+			return m.updateNewForm(msg)
 		}
 	}
 	return m, nil
@@ -216,6 +225,9 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case "n":
+		return m.enterNewForm()
+
 	case "v":
 		return m.enterDetail()
 
@@ -277,6 +289,10 @@ func (m Model) View() string {
 
 	if m.mode == modeDetail || m.mode == modeDetailSearch {
 		return m.viewDetail()
+	}
+
+	if m.mode == modeNew {
+		return m.viewNewForm()
 	}
 
 	var b strings.Builder
@@ -386,7 +402,7 @@ func (m Model) renderRow(s model.Session, selected bool) string {
 }
 
 func (m Model) renderHelp() string {
-	return helpStyle.Render("  Enter: open  y: yolo  v: view  /: search  Tab: filter  q: quit")
+	return helpStyle.Render("  Enter: open  y: yolo  n: new  v: view  /: search  Tab: filter  q: quit")
 }
 
 type colWidths struct {
@@ -436,6 +452,11 @@ func (m *Model) clampOffset() {
 	if m.offset < 0 {
 		m.offset = 0
 	}
+}
+
+// SetCWD sets the working directory used for new sessions.
+func (m *Model) SetCWD(cwd string) {
+	m.cwd = cwd
 }
 
 // LaunchCmd returns the command to execute after TUI exits.

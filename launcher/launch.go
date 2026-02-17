@@ -30,6 +30,25 @@ func BuildYoloCommand(s model.Session) string {
 	}
 }
 
+// BuildNewCommand returns the shell command to start a new session.
+func BuildNewCommand(tool string, dir string, yolo bool) string {
+	cd := fmt.Sprintf("cd %s", shellQuote(dir))
+	switch tool {
+	case "claude":
+		if yolo {
+			return cd + " && claude --dangerously-skip-permissions"
+		}
+		return cd + " && claude"
+	case "codex":
+		if yolo {
+			return cd + " && codex --full-auto"
+		}
+		return cd + " && codex"
+	default:
+		return ""
+	}
+}
+
 func shellQuote(s string) string {
 	// simple quoting: wrap in single quotes, escape existing single quotes
 	return "'" + replaceAll(s, "'", "'\\''") + "'"

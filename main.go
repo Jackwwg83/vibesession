@@ -50,6 +50,9 @@ func main() {
 	}
 
 	m := tui.NewModel(all)
+	if cwd, err := os.Getwd(); err == nil {
+		m.SetCWD(cwd)
+	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	result, err := p.Run()
 	if err != nil {
