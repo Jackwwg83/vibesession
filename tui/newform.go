@@ -142,7 +142,7 @@ func (m Model) viewNewForm() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("39")).
 		Padding(1, 2).
-		Width(50)
+		Width(56)
 
 	titleStr := lipgloss.NewStyle().
 		Bold(true).
