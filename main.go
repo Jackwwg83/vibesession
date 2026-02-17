@@ -39,8 +39,12 @@ func main() {
 			return all[i].Time.After(all[j].Time)
 		})
 		for _, s := range all {
+			summary := s.Summary
+			if s.TeamName != "" {
+				summary = "[team:" + s.TeamName + "] " + summary
+			}
 			fmt.Printf("%-6s │ %s │ %s │ %-14s │ %s\n",
-				s.Source, s.ShortID, s.Time.Format("01-02 15:04"), s.Project, s.Summary)
+				s.Source, s.ShortID, s.Time.Format("01-02 15:04"), s.Project, summary)
 		}
 		return
 	}

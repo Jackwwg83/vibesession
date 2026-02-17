@@ -18,4 +18,5 @@ type Session struct {
 	CWD      string // full working directory path
 	Summary  string // first user message, truncated
 	FilePath string // path to .jsonl file
+	TeamName string // non-empty if this is a team/subagent session
 }

@@ -85,6 +85,7 @@ func parseClaudeSession(filePath string) *model.Session {
 		SessionID string `json:"sessionId"`
 		CWD       string `json:"cwd"`
 		Type      string `json:"type"`
+		TeamName  string `json:"teamName"`
 		Message   struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
@@ -157,6 +158,7 @@ func parseClaudeSession(filePath string) *model.Session {
 		CWD:      firstLine.CWD,
 		Summary:  summary,
 		FilePath: filePath,
+		TeamName: firstLine.TeamName,
 	}
 }
 

@@ -79,7 +79,7 @@ func (m *Model) applyFilter() {
 
 		// text search
 		if search != "" {
-			haystack := strings.ToLower(s.Summary + " " + s.Project + " " + s.ID)
+			haystack := strings.ToLower(s.Summary + " " + s.Project + " " + s.ID + " " + s.TeamName)
 			if !strings.Contains(haystack, search) {
 				continue
 			}
@@ -298,6 +298,9 @@ func (m Model) renderRow(s model.Session, selected bool) string {
 
 	timeStr := s.Time.Format("01-02 15:04")
 	summaryStr := s.Summary
+	if s.TeamName != "" {
+		summaryStr = "[team:" + s.TeamName + "] " + summaryStr
+	}
 	summaryRunes := []rune(summaryStr)
 	if len(summaryRunes) > w.summary {
 		summaryStr = string(summaryRunes[:w.summary-2]) + ".."
