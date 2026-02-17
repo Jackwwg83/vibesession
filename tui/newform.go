@@ -55,6 +55,10 @@ func (m Model) enterNewForm() (Model, tea.Cmd) {
 }
 
 func (m Model) updateNewForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.newForm == nil {
+		m.mode = modeList
+		return m, nil
+	}
 	f := m.newForm
 	key := msg.String()
 

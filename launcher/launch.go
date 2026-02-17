@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/jackwu/vibesession/model"
 )
@@ -32,6 +33,7 @@ func BuildYoloCommand(s model.Session) string {
 
 // BuildNewCommand returns the shell command to start a new session.
 func BuildNewCommand(tool string, dir string, yolo bool) string {
+	dir = expandTilde(dir)
 	cd := fmt.Sprintf("cd %s", shellQuote(dir))
 	switch tool {
 	case "claude":
@@ -47,6 +49,25 @@ func BuildNewCommand(tool string, dir string, yolo bool) string {
 	default:
 		return ""
 	}
+}
+
+func expandTilde(path string) string {
+	if len(path) == 0 {
+		return path
+	}
+	if path[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		if len(path) == 1 {
+			return home
+		}
+		if path[1] == '/' {
+			return home + path[1:]
+		}
+	}
+	return path
 }
 
 func shellQuote(s string) string {
