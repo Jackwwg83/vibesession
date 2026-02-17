@@ -1,6 +1,8 @@
 # VibeSession (`vbs`)
 
-A TUI tool for finding, browsing, and resuming your Claude Code and Codex CLI sessions.
+A TUI tool for finding, browsing, and resuming your Claude Code and Codex CLI sessions — with **automatic TTS voice output** so Claude can talk back to you.
+
+一个用于查找、浏览和恢复 Claude Code / Codex CLI 会话的终端工具，支持 **TTS 自动语音播报**，让 Claude 的回复不只是文字。
 
 If you run multiple AI coding sessions across different projects and terminals, you know the pain — dozens of sessions with UUID names scattered across your filesystem, and no way to find "that one where I was debugging the payment API last Tuesday."
 
@@ -24,12 +26,70 @@ vbs --list       # plain text list (for scripting)
 
 ## Features
 
+- **TTS Voice Output** 🔊: Claude's responses are automatically read aloud after each reply. Supports FIFO queue for multi-session — no interruptions. 每次 Claude 回复完自动朗读，多 session 排队播放不打断。
 - **Dual source**: Scans both Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`)
 - **TUI interface**: Searchable, filterable session list with keyboard navigation
 - **Conversation viewer**: Browse the full conversation history of any session (press `v`)
 - **One-step resume**: Select a session → edit the launch command → run it
 - **Smart summaries**: Extracts the first user message as a readable summary
 - **Fast**: Concurrent scanning, reads only the first few lines of each file
+
+## TTS Voice Output / 语音播报
+
+Make Claude Code talk back to you. Every time Claude finishes a reply, it's automatically read aloud.
+
+让 Claude Code 开口说话。每次 Claude 回复完成后，自动朗读回复内容。
+
+### Setup / 安装
+
+```bash
+# Prerequisites / 前置依赖
+brew install jq
+pipx install edge-tts   # or: pip3 install edge-tts
+
+# One-command setup / 一键配置
+vbs tts setup
+```
+
+### Commands / 命令
+
+| Command | Description | 说明 |
+|---------|-------------|------|
+| `vbs tts setup` | First-time install: writes hook + config | 首次安装：写入 hook 和配置 |
+| `vbs tts` | Show current status | 显示当前状态 |
+| `vbs tts on` | Enable TTS | 开启语音 |
+| `vbs tts off` | Disable TTS | 关闭语音 |
+| `vbs tts next` | Skip current playback | 跳过当前播放 |
+| `vbs tts clear` | Clear queue and stop | 清空队列并停止 |
+
+### Multi-session behavior / 多会话行为
+
+Two modes controlled by `overlap` in `~/.config/vbs/tts.json`:
+
+通过 `~/.config/vbs/tts.json` 中的 `overlap` 字段控制：
+
+- **`queue`** (default): Strict FIFO — current playback finishes before the next one starts. No interruptions. 严格排队，当前播完再播下一条，不打断。
+- **`interrupt`**: New replies cut off the current playback immediately. 新回复立即打断当前播放。
+
+### Config / 配置文件
+
+`~/.config/vbs/tts.json`:
+```json
+{
+  "enabled": true,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+15%",
+  "max_length": 2000,
+  "overlap": "queue"
+}
+```
+
+### How it works / 工作原理
+
+1. Claude Code Stop hook triggers after each reply / 每次回复完触发 Stop hook
+2. Hook extracts text, cleans markdown, writes a task to the queue / Hook 提取文本、清理 markdown、写入队列
+3. A single worker process consumes tasks serially (FIFO) / 单 worker 进程串行消费（保证顺序）
+4. `edge-tts` synthesizes speech, `afplay` plays it / edge-tts 合成语音，afplay 播放
 
 ## Usage
 
