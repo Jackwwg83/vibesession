@@ -216,30 +216,43 @@ func RunStatus() {
 	}
 }
 
-// RunNext skips the currently playing TTS and moves to the next in queue
+// RunNext skips the currently playing TTS and moves to the next in queue.
+// Kills both afplay (playback) and edge-tts (synthesis) so the worker
+// immediately moves to the next queued task.
 func RunNext() {
-	// Kill current afplay process
 	exec.Command("pkill", "-f", "afplay /tmp/vbs-tts").Run()
+	exec.Command("pkill", "-f", "edge-tts.*vbs-tts").Run()
 	fmt.Println("Skipped current playback.")
 }
 
-// RunClear removes all pending items from the queue
+// RunClear removes all pending items from the queue and stops playback.
 func RunClear() {
 	entries, err := os.ReadDir(queueDir)
 	if err != nil {
-		fmt.Println("Queue is empty.")
+		if os.IsNotExist(err) {
+			fmt.Println("Queue is empty.")
+		} else {
+			fmt.Fprintf(os.Stderr, "Failed to read queue: %v\n", err)
+		}
 		return
 	}
 	count := 0
 	for _, e := range entries {
 		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
-			os.Remove(filepath.Join(queueDir, e.Name()))
+			if rmErr := os.Remove(filepath.Join(queueDir, e.Name())); rmErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not remove %s: %v\n", e.Name(), rmErr)
+			}
 			count++
 		}
 	}
-	// Also kill current playback
+	// Also kill current playback and synthesis
 	exec.Command("pkill", "-f", "afplay /tmp/vbs-tts").Run()
-	fmt.Printf("Cleared %d queued items and stopped playback.\n", count)
+	exec.Command("pkill", "-f", "edge-tts.*vbs-tts").Run()
+	if count == 0 {
+		fmt.Println("Queue was empty. Stopped current playback.")
+	} else {
+		fmt.Printf("Cleared %d queued items and stopped playback.\n", count)
+	}
 }
 
 // updateSettings reads settings.json, adds Stop hook, writes back.
@@ -403,13 +416,14 @@ var hookScript = "#!/bin/bash\n" +
 	"\n" +
 	"QUEUEDIR=\"/tmp/vbs-tts-queue\"\n" +
 	"PIDFILE=\"/tmp/vbs-tts-worker.pid\"\n" +
+	"WORKERLOCK=\"/tmp/vbs-tts-worker-start.lock\"\n" +
 	"WORKER=\"$HOME/.claude/hooks/tts-worker.sh\"\n" +
 	"\n" +
 	"if [ \"$OVERLAP\" = \"interrupt\" ]; then\n" +
 	"  # Interrupt mode: clear queue, kill worker & playback, enqueue, start fresh worker\n" +
 	"  rm -f \"$QUEUEDIR\"/*.json 2>/dev/null || true\n" +
 	"  pkill -f \"afplay /tmp/vbs-tts\" 2>/dev/null || true\n" +
-	"  # Kill existing worker\n" +
+	"  pkill -f \"edge-tts.*vbs-tts\" 2>/dev/null || true\n" +
 	"  if [ -f \"$PIDFILE\" ]; then\n" +
 	"    OLD_PID=$(cat \"$PIDFILE\" 2>/dev/null)\n" +
 	"    if [ -n \"$OLD_PID\" ]; then kill \"$OLD_PID\" 2>/dev/null || true; fi\n" +
@@ -417,31 +431,51 @@ var hookScript = "#!/bin/bash\n" +
 	"  fi\n" +
 	"fi\n" +
 	"\n" +
-	"# Enqueue: write task JSON with timestamp-based filename for FIFO ordering\n" +
+	"# Enqueue: atomic write (tmp -> mv) to prevent worker reading partial JSON\n" +
 	"mkdir -p \"$QUEUEDIR\" 2>/dev/null || true\n" +
 	"TASK_ID=$(python3 -c 'import time; print(f\"{time.time_ns()}\")' 2>/dev/null || date +%s)_$$\n" +
 	"TASK_FILE=\"$QUEUEDIR/${TASK_ID}.json\"\n" +
+	"TASK_TMP=\"$QUEUEDIR/${TASK_ID}.tmp\"\n" +
 	"\n" +
-	"# Write task as JSON (text in a file to avoid escaping issues)\n" +
 	"TXTFILE=\"/tmp/vbs-tts-text-${TASK_ID}.txt\"\n" +
 	"printf '%s' \"$TEXT\" > \"$TXTFILE\" 2>/dev/null || true\n" +
 	"\n" +
-	"cat > \"$TASK_FILE\" 2>/dev/null << TASKEOF\n" +
+	"# Write to .tmp first, then atomic rename to .json\n" +
+	"cat > \"$TASK_TMP\" 2>/dev/null << TASKEOF\n" +
 	"{\"text_file\": \"$TXTFILE\", \"created\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}\n" +
 	"TASKEOF\n" +
+	"mv \"$TASK_TMP\" \"$TASK_FILE\" 2>/dev/null || true\n" +
 	"\n" +
-	"# Ensure worker is running\n" +
-	"WORKER_ALIVE=false\n" +
-	"if [ -f \"$PIDFILE\" ]; then\n" +
-	"  OLD_PID=$(cat \"$PIDFILE\" 2>/dev/null)\n" +
-	"  if [ -n \"$OLD_PID\" ] && kill -0 \"$OLD_PID\" 2>/dev/null; then\n" +
-	"    WORKER_ALIVE=true\n" +
+	"# Ensure exactly one worker is running.\n" +
+	"# Use mkdir as atomic lock to prevent concurrent hooks from spawning multiple workers.\n" +
+	"ensure_worker() {\n" +
+	"  # Fast path: worker is alive\n" +
+	"  if [ -f \"$PIDFILE\" ]; then\n" +
+	"    local PID=$(cat \"$PIDFILE\" 2>/dev/null)\n" +
+	"    if [ -n \"$PID\" ] && kill -0 \"$PID\" 2>/dev/null; then\n" +
+	"      return\n" +
+	"    fi\n" +
 	"  fi\n" +
-	"fi\n" +
+	"  # Slow path: acquire start lock, double-check, spawn\n" +
+	"  if mkdir \"$WORKERLOCK\" 2>/dev/null; then\n" +
+	"    # Got the lock — double-check PID under lock\n" +
+	"    local NEED_START=true\n" +
+	"    if [ -f \"$PIDFILE\" ]; then\n" +
+	"      local PID=$(cat \"$PIDFILE\" 2>/dev/null)\n" +
+	"      if [ -n \"$PID\" ] && kill -0 \"$PID\" 2>/dev/null; then\n" +
+	"        NEED_START=false\n" +
+	"      fi\n" +
+	"    fi\n" +
+	"    if [ \"$NEED_START\" = \"true\" ]; then\n" +
+	"      nohup \"$WORKER\" > /dev/null 2>&1 &\n" +
+	"      sleep 0.1\n" +
+	"    fi\n" +
+	"    rmdir \"$WORKERLOCK\" 2>/dev/null || true\n" +
+	"  fi\n" +
+	"  # If we didn't get the lock, another hook is starting the worker — that's fine\n" +
+	"}\n" +
 	"\n" +
-	"if [ \"$WORKER_ALIVE\" = \"false\" ]; then\n" +
-	"  nohup \"$WORKER\" > /dev/null 2>&1 &\n" +
-	"fi\n" +
+	"ensure_worker\n" +
 	"\n" +
 	"exit 0\n"
 
@@ -458,14 +492,22 @@ var workerScript = "#!/bin/bash\n" +
 	"PIDFILE=\"/tmp/vbs-tts-worker.pid\"\n" +
 	"CONFIG_FILE=\"$HOME/.config/vbs/tts.json\"\n" +
 	"\n" +
-	"# Write our PID\n" +
-	"echo $$ > \"$PIDFILE\"\n" +
+	"# Abort if another worker is already running (race-safe via PID check)\n" +
+	"if [ -f \"$PIDFILE\" ]; then\n" +
+	"  EXISTING=$(cat \"$PIDFILE\" 2>/dev/null)\n" +
+	"  if [ -n \"$EXISTING\" ] && [ \"$EXISTING\" != \"$$\" ] && kill -0 \"$EXISTING\" 2>/dev/null; then\n" +
+	"    exit 0\n" +
+	"  fi\n" +
+	"fi\n" +
+	"\n" +
+	"# Write our PID atomically\n" +
+	"echo $$ > \"$PIDFILE.tmp\" && mv \"$PIDFILE.tmp\" \"$PIDFILE\"\n" +
 	"trap 'rm -f \"$PIDFILE\"' EXIT\n" +
 	"\n" +
 	"IDLE_COUNT=0\n" +
 	"\n" +
 	"while true; do\n" +
-	"  # Find oldest task (sorted by filename = timestamp)\n" +
+	"  # Find oldest task (only .json files, sorted by filename = timestamp)\n" +
 	"  TASK=$(ls \"$QUEUEDIR\"/*.json 2>/dev/null | sort | head -1)\n" +
 	"\n" +
 	"  if [ -z \"$TASK\" ]; then\n" +
