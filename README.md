@@ -9,11 +9,10 @@ If you run multiple AI coding sessions across different projects and terminals, 
 ## Quick Start
 
 ```bash
-# Install
-git clone https://github.com/Jackwwg83/vibesession.git
-cd vibesession
-go build -o vbs .
-mkdir -p ~/bin && cp vbs ~/bin/
+# Install (macOS Apple Silicon — see Install section for other platforms)
+curl -L -o vbs https://github.com/Jackwwg83/vibesession/releases/latest/download/vbs-darwin-arm64
+chmod +x vbs
+mkdir -p ~/bin && mv vbs ~/bin/
 
 # Verify it's in your PATH
 command -v vbs || echo 'Add ~/bin to your PATH: export PATH="$HOME/bin:$PATH"'
@@ -95,9 +94,27 @@ Make sure `~/bin` is in your PATH:
 export PATH="$HOME/bin:$PATH"
 ```
 
-### From release
+### From release (no Go required)
 
-Download the binary from [Releases](https://github.com/Jackwwg83/vibesession/releases) and add it to your PATH.
+Download the pre-built binary from [Releases](https://github.com/Jackwwg83/vibesession/releases):
+
+```bash
+# macOS Apple Silicon
+curl -L -o vbs https://github.com/Jackwwg83/vibesession/releases/latest/download/vbs-darwin-arm64
+
+# macOS Intel
+curl -L -o vbs https://github.com/Jackwwg83/vibesession/releases/latest/download/vbs-darwin-amd64
+
+# Linux x86_64
+curl -L -o vbs https://github.com/Jackwwg83/vibesession/releases/latest/download/vbs-linux-amd64
+```
+
+Then install:
+
+```bash
+chmod +x vbs
+mkdir -p ~/bin && mv vbs ~/bin/
+```
 
 ## How It Works
 
