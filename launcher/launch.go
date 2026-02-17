@@ -10,9 +10,21 @@ import (
 func BuildCommand(s model.Session) string {
 	switch s.Source {
 	case model.SourceClaude:
-		return fmt.Sprintf("cd %s && claude -r %s", shellQuote(s.CWD), s.ID)
+		return fmt.Sprintf("cd %s && claude -r %s", shellQuote(s.CWD), shellQuote(s.ID))
 	case model.SourceCodex:
-		return fmt.Sprintf("cd %s && codex resume %s", shellQuote(s.CWD), s.ID)
+		return fmt.Sprintf("cd %s && codex resume %s", shellQuote(s.CWD), shellQuote(s.ID))
+	default:
+		return ""
+	}
+}
+
+// BuildYoloCommand returns the shell command to resume a session in yolo mode.
+func BuildYoloCommand(s model.Session) string {
+	switch s.Source {
+	case model.SourceClaude:
+		return fmt.Sprintf("cd %s && claude -r %s --dangerously-skip-permissions", shellQuote(s.CWD), shellQuote(s.ID))
+	case model.SourceCodex:
+		return fmt.Sprintf("cd %s && codex resume %s --full-auto", shellQuote(s.CWD), shellQuote(s.ID))
 	default:
 		return ""
 	}

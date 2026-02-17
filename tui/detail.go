@@ -75,6 +75,14 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeCommand
 		return m, nil
 
+	case "y":
+		cmd := launcher.BuildYoloCommand(m.detailSession)
+		if cmd != "" {
+			m.launchCmd = cmd
+			m.quitting = true
+			return m, tea.Quit
+		}
+
 	case "up", "k":
 		m.detailScrollUp(1)
 	case "down", "j":
@@ -202,7 +210,7 @@ func (m Model) detailHelpBar() string {
 			}
 			scroll = dimStyle.Render(fmt.Sprintf("  %d%%", pct))
 		}
-		return helpStyle.Render("  Esc: back  Enter: open  /: search  j/k: scroll") + info + scroll
+		return helpStyle.Render("  Esc: back  Enter: open  y: yolo  /: search  j/k: scroll") + info + scroll
 	}
 }
 

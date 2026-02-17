@@ -205,6 +205,17 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeCommand
 		}
 
+	case "y":
+		if len(m.filtered) > 0 {
+			s := m.filtered[m.cursor]
+			cmd := launcher.BuildYoloCommand(s)
+			if cmd != "" {
+				m.launchCmd = cmd
+				m.quitting = true
+				return m, tea.Quit
+			}
+		}
+
 	case "v":
 		return m.enterDetail()
 
@@ -375,7 +386,7 @@ func (m Model) renderRow(s model.Session, selected bool) string {
 }
 
 func (m Model) renderHelp() string {
-	return helpStyle.Render("  Enter: open  v: view  /: search  Tab: filter  q: quit")
+	return helpStyle.Render("  Enter: open  y: yolo  v: view  /: search  Tab: filter  q: quit")
 }
 
 type colWidths struct {
